@@ -55,28 +55,11 @@ def encrypt_data(plaintext, passphrase):
     encrypted_blob = {
         "salt": base64.b64encode(salt).decode(),
         "iv": base64.b64encode(iv).decode(),
-        "ciphertext": base64.b64encode(ciphertext).decode()
+        "ciphertext": base64.b64encode(ciphertext).decode(),
+        "tag": base64.b64encode(encryptor.tag).decode()
     }
 
     return json.dumps(encrypted_blob)
-
-def decrypt_data(encrypted_blob, passphrase):
-    """Decrypts AES-256-GCM encrypted data."""
-    try:
-        blob = json.loads(encrypted_blob)
-        salt = base64.b64decode(blob["salt"])
-        iv = base64.b64decode(blob["iv"])
-        ciphertext = base64.b64decode(blob["ciphertext"])
-        
-        key = derive_key(passphrase, salt)
-
-        cipher = Cipher(algorithms.AES(key), modes.GCM(iv), backend=default_backend())
-        decryptor = cipher.decryptor()
-        plaintext = decryptor.update(ciphertext) + decryptor.finalize()
-
-        return plaintext.decode()
-    except Exception as e:
-        return None  # Decryption failed
 
 def save_mapping(encrypted_data, passphrase):
     """Stores encrypted data and hashed passphrase in SQLite database."""
@@ -109,6 +92,25 @@ def retrieve_mapping(passphrase):
             return None  # Invalid passphrase
     return None  # No data found
 
+def decrypt_data(encrypted_blob, passphrase):
+    """Decrypts AES-256-GCM encrypted data."""
+    try:
+        blob = json.loads(encrypted_blob)
+        salt = base64.b64decode(blob["salt"])
+        iv = base64.b64decode(blob["iv"])
+        ciphertext = base64.b64decode(blob["ciphertext"])
+        tag = base64.b64decode(blob["tag"])
+        
+        key = derive_key(passphrase, salt)
+
+        cipher = Cipher(algorithms.AES(key), modes.GCM(iv, tag), backend=default_backend())
+        decryptor = cipher.decryptor()
+        plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+
+        return plaintext.decode()
+    except Exception as e:
+        return None  # Decryption failed
+    
 def main():
     initialize_db()
 
